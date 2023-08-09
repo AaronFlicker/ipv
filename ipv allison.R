@@ -125,21 +125,41 @@ ggplot(totals, aes(x = ReportMonth, y = Pct)) +
     )
 ggsave("IPV_chart.pdf")
 
+avondale <- ipv |>
+  filter(
+    ReportMonth >= "2021-01-01",
+    Neighborhood == "Avondale"
+    ) |>
+  group_by(ReportMonth) |>
+  summarise(
+    Total = n(),
+    Vaccinated = sum(numerator),
+    WWC2 = sum(WWC2)
+  ) |>
+  pivot_longer(
+    cols = c(Vaccinated, WWC2),
+    names_to = "Measure"
+  ) |>
+  mutate(Pct = value/Total) |>
+  group_by(Measure) |>
+  mutate(
+    Center = mean(Pct),
+    Sigma = sqrt((Center*(1-Center))/Total),
+    UCL = Center + (3 * Sigma),
+    LCL = Center - (3 * Sigma),
+    xlabel = paste0(ReportMonth, " (n = ", Total, ")"),
+    Goal = ifelse(Measure == "Vaccinated", .8, NA),
+    Measure = ifelse(Measure == "WWC2", "Well Child Visit (2 mo.)", Measure),
+    UCL = ifelse(UCL > 1, 1, UCL),
+    LCL = ifelse(LCL < 0, 0, LCL)
+  )
 
+alist <- sort(unique(avondale$xlabel))
 
-
-
-
-
-
-
-
-
-totals |>
-  ggplot(aes(x = Month, y = Pct)) +
+ggplot(avondale, aes(x = ReportMonth, y = Pct)) +
+  geom_line(size = 1, color = "blue") +
   geom_point(size = 2, color = "blue") +
-  geom_line(linewidth = 1, color = "blue") +
-  facet_grid(variable~.) +
+  facet_grid(Measure~.) +
   scale_y_continuous(
     limits = c(0, 1), 
     breaks = seq(0, 1, .2), 
@@ -147,18 +167,21 @@ totals |>
   ) +
   labs(
     x = NULL, 
-    y = "% of patients", 
-    title = "% of patients with food insecurity who have it resolved within four months"
+    y = "%", 
+    title = "% of 76-day-old Gen Peds Patients in Avondale Who Have Received an IPV Vaccine"
   ) +
-  scale_x_date(
-    breaks = seq.Date(as.Date("2022-01-01"), max(totals$Month), "months"),
-    labels = xlabel
-  ) +
+  scale_x_date(breaks = monthlist, labels = alist) +
+  theme_minimal() +
   theme(
-    plot.title.position = "plot", 
-    plot.title = element_text(hjust = .5),
-    axis.text.x = element_text(angle = 90)
+    axis.text.x = element_text(angle = 90),
+    plot.title = element_text(hjust = .5)
   ) +
-  geom_line(aes(x = Month, y = UC), color = "red", linetype = "dashed") +
-  geom_line(aes(x = Month, y = LC), color = "red", linetype = "dashed") +
-  geom_line(aes(x = Month, y = Pbar), color = "green", linewidth = 1)
+  geom_line(aes(x = ReportMonth, y = Center), color = "red") +
+  geom_line(aes(x = ReportMonth, y = UCL), color = "red", linetype = "dashed") +
+  geom_line(aes(x = ReportMonth, y = LCL), color = "red", linetype = "dashed") +
+  geom_line(
+    aes(x = ReportMonth, y = Goal), 
+    color = "green",
+    linetype = "twodash"
+  )
+ggsave("avondale_ipv.pdf")
